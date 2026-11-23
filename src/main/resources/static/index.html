@@ -1,0 +1,353 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 850px;
+            height: 90vh;
+            background: #1e293b;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: #172033;
+            border-bottom: 1px solid #334155;
+        }
+
+        .chat-header h2 {
+            font-size: 22px;
+        }
+
+        .chat-header p {
+            color: #94a3b8;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 13px 16px;
+            border-radius: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .user-message {
+            align-self: flex-end;
+            background: #2563eb;
+            border-bottom-right-radius: 3px;
+        }
+
+        .ai-message {
+            align-self: flex-start;
+            background: #334155;
+            border-bottom-left-radius: 3px;
+        }
+
+        .message-label {
+            font-size: 11px;
+            color: #cbd5e1;
+            margin-bottom: 5px;
+        }
+
+        .chat-input-area {
+            padding: 18px;
+            display: flex;
+            gap: 10px;
+            background: #172033;
+            border-top: 1px solid #334155;
+        }
+
+        #promptInput {
+            flex: 1;
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid #475569;
+            background: #1e293b;
+            color: white;
+            outline: none;
+            font-size: 15px;
+        }
+
+        #promptInput:focus {
+            border-color: #3b82f6;
+        }
+
+        #sendButton {
+            padding: 0 22px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        #sendButton:hover {
+            background: #1d4ed8;
+        }
+
+        #sendButton:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .typing {
+            color: #94a3b8;
+            font-size: 13px;
+            align-self: flex-start;
+        }
+
+        @media (max-width: 600px) {
+            .chat-container {
+                height: 100vh;
+                border-radius: 0;
+            }
+
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="chat-container">
+
+    <div class="chat-header">
+        <h2>✨ AI Assistant</h2>
+        <p>Powered by Spring AI</p>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+
+        <div class="message ai-message">
+            <div class="message-label">AI Assistant</div>
+            Hello! 👋 How can I help you today?
+        </div>
+
+    </div>
+
+    <div class="chat-input-area">
+
+        <input
+            type="text"
+            id="promptInput"
+            placeholder="Ask me anything..."
+            autocomplete="off"
+        >
+
+        <button id="sendButton" onclick="sendMessage()">
+            Send ➤
+        </button>
+
+    </div>
+
+</div>
+
+<script>
+
+const API_URL = "/api/ai/response";
+
+const chatMessages = document.getElementById("chatMessages");
+const promptInput = document.getElementById("promptInput");
+const sendButton = document.getElementById("sendButton");
+
+function normalizeAiText(value) {
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+
+        if (!trimmed) {
+            return "";
+        }
+
+        try {
+            return normalizeAiText(JSON.parse(trimmed));
+        } catch (error) {
+            return trimmed;
+        }
+    }
+
+    if (Array.isArray(value)) {
+        return value
+            .map(normalizeAiText)
+            .filter(Boolean)
+            .join("\n");
+    }
+
+    if (typeof value === "object") {
+        const preferredKeys = ["message", "response", "content", "answer", "text", "name"];
+
+        for (const key of preferredKeys) {
+            if (Object.prototype.hasOwnProperty.call(value, key)) {
+                return normalizeAiText(value[key]);
+            }
+        }
+
+        const firstValue = Object.values(value).find(item => item !== null && item !== undefined);
+        if (firstValue !== undefined) {
+            return normalizeAiText(firstValue);
+        }
+
+        return JSON.stringify(value);
+    }
+
+    return String(value);
+}
+
+function addMessage(message, sender) {
+
+    const messageDiv = document.createElement("div");
+    messageDiv.classList.add("message");
+
+    messageDiv.classList.add(
+        sender === "user" ? "user-message" : "ai-message"
+    );
+
+    const label = document.createElement("div");
+    label.classList.add("message-label");
+
+    label.textContent = sender === "user" ? "You" : "AI Assistant";
+
+    const content = document.createElement("div");
+    content.textContent = message;
+
+    messageDiv.appendChild(label);
+    messageDiv.appendChild(content);
+
+    chatMessages.appendChild(messageDiv);
+
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+async function sendMessage() {
+
+    const prompt = promptInput.value.trim();
+
+    if (!prompt) return;
+
+    addMessage(prompt, "user");
+
+    promptInput.value = "";
+
+    sendButton.disabled = true;
+    sendButton.textContent = "Sending...";
+
+    const loading = document.createElement("div");
+    loading.classList.add("typing");
+    loading.textContent = "AI is thinking...";
+
+    chatMessages.appendChild(loading);
+
+    try {
+
+        const params = new URLSearchParams({
+            prompt: prompt
+        });
+
+        const response = await fetch(
+            `${API_URL}?${params.toString()}`,
+            {
+                method: "GET"
+            }
+        );
+
+        const rawResponse = await response.text();
+
+        if (!response.ok) {
+            throw new Error(
+                `HTTP ${response.status}: ${rawResponse}`
+            );
+        }
+
+        if (!rawResponse.trim()) {
+            throw new Error("Backend returned an empty response");
+        }
+
+        const aiResponse = normalizeAiText(rawResponse);
+
+        if (!aiResponse.trim()) {
+            throw new Error("Backend returned an empty response");
+        }
+
+        loading.remove();
+
+        addMessage(aiResponse, "ai");
+
+    } catch (error) {
+
+        loading.remove();
+
+        console.error("API Error:", error);
+
+        addMessage(
+            `Error: ${error.message}`,
+            "ai"
+        );
+
+    } finally {
+
+        sendButton.disabled = false;
+        sendButton.textContent = "Send ➤";
+
+        promptInput.focus();
+    }
+}
+
+// Enter key support
+promptInput.addEventListener("keydown", function(event) {
+
+    if (event.key === "Enter") {
+        sendMessage();
+    }
+
+});
+
+
+
+</script>
+
+</body>
+</html>
